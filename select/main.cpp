@@ -2,12 +2,14 @@
 #include <bits/types/struct_timeval.h>
 #include <cstddef>
 #include <cstring>
+#include <ctime>
 #include <iostream>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <vector>
+#include <fcntl.h>
 
 
 using namespace std;
@@ -15,6 +17,10 @@ using namespace std;
 static uint16_t client_listen_host = 3000;
 static int max_client_num = 1024;
 static int max_buffer_size = 1024;
+// 相应操作是否阻塞
+// 非阻塞的优势：立即返回（因此需要使用while循环+超时时间控制），不阻塞主线程（适用于高并发场景）
+// static bool recv_block = true;
+// static bool send_block = true;
 
 int main(int argc, char** argv) {
     int listenFd = socket(AF_INET, SOCK_STREAM, 0);
@@ -50,6 +56,7 @@ int main(int argc, char** argv) {
     FD_ZERO(&writeSet);
     FD_SET(listenFd, &readSet);
 
+    // 如果超时数设置为0，则为非阻塞
     timeval time;
     // 秒数
     time.tv_sec = 6;
@@ -73,6 +80,8 @@ int main(int argc, char** argv) {
             if (errno != EINTR) {
                 break;
             }
+        } else if (activeFd == 0) {
+            continue;
         }
  
         // 存在新的连接请求
@@ -100,11 +109,14 @@ int main(int argc, char** argv) {
                 cout << "newClientFd " << newClientFd << " Add error, clientFds full!" << endl;
             }    
         }
+        // 计时处理
+        double start, stop, durationTime;
 
         // 客户端fd检查是否可读，读取对端数据后直接回复
         for (int i = 0; i < max_client_num; ++i) {
             int clientFd = clientFds[i];
             if (clientFd != -1) {
+                start = clock();
                 if (FD_ISSET(clientFd, &tempReadSet)) {
                     char buffer[max_buffer_size];
                     // recv在读取的时候是根据buffer的大小逐次读取
@@ -118,15 +130,19 @@ int main(int argc, char** argv) {
                         FD_CLR(clientFd, &writeSet);
                         clientFds[i] = -1;
                     } else {
-                        buffer[bytesReceived] = '\0';
+                        buffer[bytesReceived] = '\n';
                         cout << "Received from client " << clientFd << ": " << buffer << endl;
-                        // 在收到数据后触发写事件
+                        // 在收到数据后触发写事件(立即回复)
                         FD_SET(clientFd, &writeSet);
-                        // 可能出现没读取完/读取完成后及时回复
-                        i--;
                     }
-                } else if (FD_ISSET(clientFd, &writeSet)) {
-                    const char *response = "Hello from server!";
+                }
+                
+                if (FD_ISSET(clientFd, &writeSet)) {
+                    stop = clock();
+                    // 除以时间频率得到秒级单位
+                    durationTime = (stop - start) / CLOCKS_PER_SEC;
+                    char response[100]; // 确保缓冲区足够大
+                    snprintf(response, sizeof(response), "Time elapsed: %f seconds\n", durationTime);
                     int bytesSent = send(clientFd, response, strlen(response), 0);
                     if (bytesSent == -1) {
                         cerr << "Failed to send data to client " << clientFd << endl;  
