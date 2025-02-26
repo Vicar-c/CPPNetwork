@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     // C++ switch不能对字符串作用，因此case处额外调用constexpr函数将字符串转为整型实现逻辑
     switch (hash_(FLAGS_mode.c_str())) {
     case hash_compile_time("select"):
-        return Select(FLAGS_port, FLAGS_max_client_num, FLAGS_buffer_size);
+        return Select(listenFd, FLAGS_max_client_num, FLAGS_buffer_size);
     default:
         cout << "mode error, use --help to get more information" << endl;
     }

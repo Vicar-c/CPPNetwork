@@ -20,30 +20,7 @@ using namespace std;
 // static bool recv_block = true;
 // static bool send_block = true;
 
-inline int Select(int client_listen_host, int max_client_num, int max_buffer_size) {
-    int listenFd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listenFd == -1) {
-        cout << "create listen error" << endl;
-    }
-
-    struct sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(client_listen_host);
-    // IP地址设置，即将IP地址设置为0.0.0.0
-    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(listenFd, (struct sockaddr*)& serverAddr, sizeof(serverAddr)) == -1) {
-        cout << "bind listen socket error" << endl;
-        close(listenFd);
-        return -1;
-    }
-
-    // 监听队列设置为最大
-    if (listen(listenFd, SOMAXCONN) == -1) {
-        cout << "listen error" << endl;
-        close(listenFd);
-        return -1;
-    }
+inline int Select(int listenFd, int max_client_num, int max_buffer_size) {
 
     int clientFds[max_client_num];
     memset(clientFds, -1, sizeof(clientFds));
