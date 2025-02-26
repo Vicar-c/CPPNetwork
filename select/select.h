@@ -14,15 +14,13 @@
 
 using namespace std;
 
-static uint16_t client_listen_host = 3000;
-static int max_client_num = 1024;
-static int max_buffer_size = 1024;
+
 // 相应操作是否阻塞
 // 非阻塞的优势：立即返回（因此需要使用while循环+超时时间控制），不阻塞主线程（适用于高并发场景）
 // static bool recv_block = true;
 // static bool send_block = true;
 
-int main(int argc, char** argv) {
+inline int Select(int client_listen_host, int max_client_num, int max_buffer_size) {
     int listenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (listenFd == -1) {
         cout << "create listen error" << endl;

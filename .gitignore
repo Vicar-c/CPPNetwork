@@ -10,3 +10,6 @@ dist-ssr
 *.local
 .clang-format
 netcat-0.7.1
+gflags
+*.o
+bin
