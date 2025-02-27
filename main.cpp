@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -5,12 +6,15 @@
 #include <unordered_map>
 #include <gflags/gflags.h>
 #include "select/select.h"
+#include "epoll/epoll.h"
+
 using namespace std;
 
 DEFINE_uint32(port, 3000, "server listen port");
-DEFINE_uint32(max_client_num, 1024, "max client fd");
-DEFINE_uint32(buffer_size, 1024, "recv message buffer size");
+DEFINE_uint32(max_clientFd_num, 1024, "max client fd");
+DEFINE_uint32(buffer_size, 1024, "recv message buffer size, should more than 1");
 DEFINE_string(mode, "select", "multiply IO mode: 'select', 'poll', 'epoll'");
+DEFINE_bool(epoll_mode, true, "if use epoll, true:ET, false:LT");
 
 typedef uint64_t hash_t;
 constexpr hash_t prime = 0x10000001B3ull;
@@ -40,6 +44,15 @@ int main(int argc, char* argv[]) {
         cout << "create listen error" << endl;
     }
 
+    // 设置为非阻塞
+    int socket_flag = fcntl(listenFd, F_GETFL, 0);
+    socket_flag |= SOCK_NONBLOCK;
+    if (fcntl(listenFd, F_SETFL, socket_flag) == -1)
+    {
+        std::cout << "set listen fd to nonblock error." << std::endl;
+        return -1;
+    }
+
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     //cout << FLAGS_port << endl;
@@ -63,7 +76,9 @@ int main(int argc, char* argv[]) {
     // C++ switch不能对字符串作用，因此case处额外调用constexpr函数将字符串转为整型实现逻辑
     switch (hash_(FLAGS_mode.c_str())) {
     case hash_compile_time("select"):
-        return Select(listenFd, FLAGS_max_client_num, FLAGS_buffer_size);
+        return Select(listenFd, FLAGS_max_clientFd_num, FLAGS_buffer_size);
+    case hash_compile_time("epoll"):
+        return Epoll(listenFd, FLAGS_max_clientFd_num, FLAGS_buffer_size, FLAGS_epoll_mode);
     default:
         cout << "mode error, use --help to get more information" << endl;
     }

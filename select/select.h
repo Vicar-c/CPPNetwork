@@ -1,6 +1,4 @@
-#include <asm-generic/errno-base.h>
 #include <bits/types/struct_timeval.h>
-#include <cstddef>
 #include <cstring>
 #include <ctime>
 #include <iostream>
@@ -95,7 +93,7 @@ inline int Select(int listenFd, int max_client_num, int max_buffer_size) {
                 if (FD_ISSET(clientFd, &tempReadSet)) {
                     char buffer[max_buffer_size];
                     // recv在读取的时候是根据buffer的大小逐次读取
-                    // 当数据量大于一次接收的能力时。TCP的缓冲区通常会保留数据直到它们被完全读取
+                    // 当数据量大于一次接收的能力时，select下的套接字仍然保留可读状态
                     int bytesReceived = recv(clientFd, buffer, sizeof(buffer), 0);
                     if (bytesReceived <= 0) {
                         cout << "Client " << clientFd << " disconnected" << endl;
