@@ -94,7 +94,7 @@ inline int Select(int listenFd, int max_client_num, int max_buffer_size) {
                     char buffer[max_buffer_size];
                     // recv在读取的时候是根据buffer的大小逐次读取
                     // 当数据量大于一次接收的能力时，select下的套接字仍然保留可读状态
-                    int bytesReceived = recv(clientFd, buffer, sizeof(buffer), 0);
+                    int bytesReceived = recv(clientFd, buffer, sizeof(buffer)-1, 0);
                     if (bytesReceived <= 0) {
                         cout << "Client " << clientFd << " disconnected" << endl;
                         close(clientFd);
@@ -103,7 +103,7 @@ inline int Select(int listenFd, int max_client_num, int max_buffer_size) {
                         FD_CLR(clientFd, &writeSet);
                         clientFds[i] = -1;
                     } else {
-                        buffer[bytesReceived] = '\n';
+                        buffer[bytesReceived] = '\0';
                         cout << "Received from client " << clientFd << ": " << buffer << endl;
                         // 在收到数据后触发写事件(立即回复)
                         FD_SET(clientFd, &writeSet);

@@ -9,6 +9,10 @@
 using namespace std;
 
 int addEpollEvent(int epollFd, int eventFd, bool isServer, bool epoll_mode) {
+    if (fcntl(eventFd, F_GETFD) == -1) {
+        perror("Invalid eventFd");
+        return -1;
+    }
     epoll_event event;
     event.data.fd = eventFd;
     event.events = EPOLLIN;
@@ -21,18 +25,19 @@ int addEpollEvent(int epollFd, int eventFd, bool isServer, bool epoll_mode) {
     if (epoll_ctl(epollFd, EPOLL_CTL_ADD, eventFd, &event) == -1) {
         return -1;
     }
+    //cout << "addEpollEvent: fd=" << eventFd << ", events=" << event.events << endl;
     return epollFd;
 }
 
-int delEpollEvent(int epollFd, epoll_event& event) {
+int delEpollEvent(int epollFd, epoll_event event) {
     if (epoll_ctl(epollFd, EPOLL_CTL_DEL, event.data.fd, &event)) {
         return -1;
     }
     return epollFd;
 }
 
-int recvData(char* buffer, int buffer_size, int epollFd, epoll_event& event) {
-    // 最后需要一个换行符，所以最大接收大小应该-1
+int recvData(char* buffer, int buffer_size, int epollFd, epoll_event event) {
+    // LT最后需要一个换行符，所以最大接收大小应该-1
     int bytesReceived = recv(event.data.fd, buffer, buffer_size, 0);
     // 正常关闭
     if (bytesReceived == 0) {
@@ -71,10 +76,22 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
         cout << "create a epoll fd error." << endl;
         return -1; 
     }
-    if (addEpollEvent(epoll_fd, listenFd, true, false) == -1) {
-        cout << "epoll event add listenFd error." << endl;
+    // if (addEpollEvent(epoll_fd, listenFd, true, epoll_mode) == -1) {
+    //     cout << "epoll event add listenFd error." << endl;
+    //     return -1;
+    // }
+
+    epoll_event event;
+    event.data.fd = listenFd;
+    event.events = EPOLLIN;
+    if (epoll_mode) {
+        event.events |= EPOLLET;
+    }
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listenFd, &event) == -1) {
         return -1;
     }
+    cout << "addListenEvent: fd=" << listenFd << ", events=" << event.events << endl;
+
 
     while (true) {
         epoll_event epoll_events[max_clientFd_num];
@@ -92,6 +109,7 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
             // &表示按位与，检测是否包含该事件符
             // 即便ET模式没读完，在有新的连接到来后还是会再读
             if (epoll_events[i].events & EPOLLIN) {
+                //cout << "epoll_events[i] fd:" << epoll_events[i].data.fd << " events:" << epoll_events[i].events << endl;
                 if (epoll_events[i].data.fd == listenFd) {
                     // 新连接
                     struct sockaddr_in clientAddr;
@@ -101,13 +119,14 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
                         cout << "accept error" << endl;
                         continue;
                     }
-                    // int socket_flag = fcntl(newClientFd, F_GETFL, 0);
-                    // socket_flag |= O_NONBLOCK;
-                    // if (fcntl(newClientFd, F_SETFL, socket_flag) == -1) {
-                    //     close(newClientFd);
-                    //     std::cout << "set client fd to non-block error." << std::endl;
-                    //     continue;
-                    // }
+                    // 在ET模式下，socket必须设置为非阻塞
+                    int socket_flag = fcntl(newClientFd, F_GETFL, 0);
+                    socket_flag |= O_NONBLOCK;
+                    if (fcntl(newClientFd, F_SETFL, socket_flag) == -1) {
+                        close(newClientFd);
+                        std::cout << "set client fd to non-block error." << std::endl;
+                        continue;
+                    }
                     if (addEpollEvent(epoll_fd, newClientFd, false, epoll_mode) == -1) {
                         cout << "epoll event add clientFd error." << endl;
                         close(newClientFd);
@@ -115,19 +134,21 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
                     }
                     cout << "accept a client connection, fd: " << newClientFd << endl;
                 } else {
-                    if (epoll_events[i].events & EPOLLET) {
-                        // TODO:先使用字节流简单模拟接收超过包数据的情况
+                    if (epoll_mode) {
+                        // TODO：先使用字节流简单模拟接收超过缓冲区数据的情况，未来使用buffer
+                        //auto res = epoll_events[i].events & EPOLLET;
+                        //cout << "epoll events should be: " << epoll_events[i].events << endl;
                         string str = "";
                         while (true) {
                             char buffer[max_buffer_size];
-                            int bytesReceived = recvData(buffer, max_buffer_size-1, epoll_fd, epoll_events[i]);
+                            int bytesReceived = recvData(buffer, max_buffer_size, epoll_fd, epoll_events[i]);
                             if (bytesReceived == 0 || bytesReceived == -2) {
                                 break;
                             }
                             if (bytesReceived == -1) {
                                 continue;
                             }
-                            cout << "bytesReceived: " << bytesReceived << endl;
+                            //cout << "bytesReceived: " << string(buffer, bytesReceived) << endl;
                             str += string(buffer, bytesReceived);
                             if (bytesReceived < max_buffer_size-1) {
                                 break;
@@ -138,12 +159,13 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
                         }
                     } else {
                         char buffer[max_buffer_size];
-                        //memset(buffer, 0, sizeof(buffer));
-                        int bytesReceived = recvData(buffer, max_buffer_size, epoll_fd, epoll_events[i]);
+                        memset(buffer, 0, sizeof(buffer));
+                        int bytesReceived = recvData(buffer, max_buffer_size-1, epoll_fd, epoll_events[i]);
                         if (bytesReceived == 0 || bytesReceived == -1 || bytesReceived == -2) {
                             continue;
                         }
-                        buffer[bytesReceived] = '\n';
+                        // 标准字符串的结尾是\0而不是\n
+                        buffer[bytesReceived] = '\0';
                         cout << "EpollLT Received from client " << epoll_events[i].data.fd << ": " << buffer << endl;
                     }
                 }
