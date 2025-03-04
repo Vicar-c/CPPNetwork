@@ -7,6 +7,7 @@
 #include <gflags/gflags.h>
 #include "select/select.h"
 #include "epoll/epoll.h"
+#include "poll/poll.h"
 
 using namespace std;
 
@@ -79,8 +80,10 @@ int main(int argc, char* argv[]) {
         return Select(listenFd, FLAGS_max_clientFd_num, FLAGS_buffer_size);
     case hash_compile_time("epoll"):
         return Epoll(listenFd, FLAGS_max_clientFd_num, FLAGS_buffer_size, FLAGS_epoll_mode);
+    case hash_compile_time("poll"):
+        return Poll(listenFd, FLAGS_max_clientFd_num, FLAGS_buffer_size);
     default:
-        cout << "mode error, use --help to get more information" << endl;
+        cout << "mode error, see DEFINE_XXX to get more information" << endl;
     }
     return 0;
 }

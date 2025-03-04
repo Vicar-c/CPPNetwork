@@ -76,22 +76,10 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
         cout << "create a epoll fd error." << endl;
         return -1; 
     }
-    // if (addEpollEvent(epoll_fd, listenFd, true, epoll_mode) == -1) {
-    //     cout << "epoll event add listenFd error." << endl;
-    //     return -1;
-    // }
-
-    epoll_event event;
-    event.data.fd = listenFd;
-    event.events = EPOLLIN;
-    if (epoll_mode) {
-        event.events |= EPOLLET;
-    }
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listenFd, &event) == -1) {
+    if (addEpollEvent(epoll_fd, listenFd, true, epoll_mode) == -1) {
+        cout << "epoll event add listenFd error." << endl;
         return -1;
     }
-    cout << "addListenEvent: fd=" << listenFd << ", events=" << event.events << endl;
-
 
     while (true) {
         epoll_event epoll_events[max_clientFd_num];
@@ -167,16 +155,16 @@ inline int Epoll(int listenFd, int max_clientFd_num, int max_buffer_size, bool e
                         // 标准字符串的结尾是\0而不是\n
                         buffer[bytesReceived] = '\0';
                         cout << "EpollLT Received from client " << epoll_events[i].data.fd << ": " << buffer << endl;
+                        
                     }
                 }
+            } else if (epoll_events[i].events & EPOLLOUT) {
+                if (epoll_events[i].data.fd == listenFd) //trigger write event
+                    continue;
+                if (epoll_mode) {
+                    std::cout << "EPOLLOUT event triggered for client fd [" << epoll_events[i].data.fd << "]." << std::endl;
+                }
             }
-            // } else if (epoll_events[i].events & EPOLLOUT) {
-            //     if (epoll_events[i].data.fd == listenFd) //trigger write event
-            //         continue;
-            //     if (epoll_mode) {
-            //         std::cout << "EPOLLOUT event triggered for client fd [" << epoll_events[i].data.fd << "]." << std::endl;
-            //     }
-            // }
         }
     }
     return 0;

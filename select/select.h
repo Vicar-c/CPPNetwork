@@ -53,6 +53,7 @@ inline int Select(int listenFd, int max_client_num, int max_buffer_size) {
             if (errno != EINTR) {
                 break;
             }
+            continue;
         } else if (activeFd == 0) {
             continue;
         }
